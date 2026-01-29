@@ -27,7 +27,7 @@ class PhotoService {
   }
 
   bool isImageExtension(String filePath) {
-    final imageExtensions = ['jpg', 'jpeg', 'png', 'pdf'];
+    final imageExtensions = ['jpg', 'jpeg', 'png'];
     final extension = filePath.split('.').last.toLowerCase();
     return imageExtensions.contains(extension);
   }
@@ -43,7 +43,7 @@ class PhotoService {
     required String folderName,
     required String token,
   }) async {
-    final url = Uri.parse('http://192.168.1.11:8000/api/photos/uploadAll');
+    final url = Uri.parse('https://techstrota.cloud/api/photos/uploadAll');
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -68,21 +68,29 @@ class PhotoService {
     }
   }
 
-  static Future<Directory> getBaseDir() async {
-    if (Platform.isAndroid) {
-      final dir = Directory('/storage/emulated/0/Pictures/MyApp');
-      if (!await dir.exists()) await dir.create(recursive: true);
-      return dir;
-    } else {
-      final docDir = await getApplicationDocumentsDirectory();
-      final dir = Directory('${docDir.path}/MyApp');
-      if (!await dir.exists()) await dir.create(recursive: true);
-      return dir;
+  static Future<Directory?> getUserRootDir() async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+    final companyId = prefs.getInt('selected_company_id');
+
+    if (userId == null || companyId == null) return null;
+
+    final base = await getExternalStorageDirectory();
+    if (base == null) return null;
+
+    final dir = Directory('${base.path}/ScanVaultApp/$companyId/$userId');
+
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
     }
+
+    return dir;
   }
 
   Future<List<String>> listFolders() async {
-    final baseDir = await getBaseDir();
+    final baseDir = await PhotoService.getUserRootDir();
+    if (baseDir == null) return [];
+
     if (!await baseDir.exists()) return [];
     return baseDir
         .listSync()
@@ -92,7 +100,9 @@ class PhotoService {
   }
 
   Future<List<File>> loadPhotosInFolder(String folderName) async {
-    final baseDir = await getBaseDir();
+    final baseDir = await PhotoService.getUserRootDir();
+    if (baseDir == null) return [];
+
     final folder = Directory('${baseDir.path}/$folderName');
 
     if (!await folder.exists()) return [];
@@ -105,7 +115,7 @@ class PhotoService {
   }
 
   bool isImage(String filePath) {
-    final imageExtensions = ['jpg', 'jpeg', 'png', 'pdf'];
+    final imageExtensions = ['jpg', 'jpeg', 'png'];
     final extension = filePath.split('.').last.toLowerCase();
     return imageExtensions.contains(extension);
   }
@@ -168,46 +178,35 @@ class PhotoService {
 
     Future<void> createFolder(String name) async {
       if (name.trim().isEmpty) return;
-      final baseDir = await getBaseDir();
+
+      final baseDir = await PhotoService.getUserRootDir();
+      if (baseDir == null) return;
+
       final folder = Directory('${baseDir.path}/$name');
 
       if (!await folder.exists()) {
         await folder.create(recursive: true);
-        print("Folder created at: ${folder.path}");
+        debugPrint("Folder created at: ${folder.path}");
       } else {
-        print("Folder already exists: ${folder.path}");
+        debugPrint("Folder already exists: ${folder.path}");
+      }
+    }
+  }
+
+  static Future<bool> isFolderFullyUploadedLocally(Directory folder) async {
+    await loadUploadedFiles();
+
+    final files = folder.listSync(recursive: true).whereType<File>().toList();
+
+    if (files.isEmpty) return false;
+
+    for (final file in files) {
+      if (!uploadedFiles.value.contains(file.absolute.path)) {
+        return false; // at least one file not uploaded
       }
     }
 
-    Future<void> savePhotoInFolder(String folderName) async {
-      if (Platform.isAndroid) {
-        final status = await Permission.storage.request();
-        if (!status.isGranted) {
-          print("Storage permission denied");
-          return;
-        }
-      }
-
-      final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(source: ImageSource.camera);
-
-      if (pickedFile != null) {
-        final baseDir = await getBaseDir();
-        final folder = Directory('${baseDir.path}/$folderName');
-
-        if (!await folder.exists()) {
-          await folder.create(recursive: true);
-        }
-
-        final fileName =
-            '${DateTime.now().millisecondsSinceEpoch}${path.extension(pickedFile.path)}';
-        final savedFile = await File(
-          pickedFile.path,
-        ).copy('${folder.path}/$fileName');
-
-        print("Photo saved at: ${savedFile.path}");
-      }
-    }
+    return true; // all files uploaded
   }
 
   static Future<void> _saveFolderMetaForBatch(
@@ -306,8 +305,19 @@ class PhotoService {
     final existingId = await getFolderIdFromDisk(folderDir);
     if (existingId != null) return existingId;
 
-    final baseStopPath =
-        '/storage/emulated/0/Pictures/MyApp/$companyId/$userId';
+    final appFilesBase = await getExternalStorageDirectory();
+    if (appFilesBase == null) return null;
+
+    final root = '${appFilesBase.path}/ScanVaultApp/$companyId/$userId';
+
+    late final String baseStopPath;
+
+    if (folderDir.path.startsWith(root)) {
+      baseStopPath = root;
+    } else {
+      debugPrint('🚫 Folder outside known roots: ${folderDir.path}');
+      return null;
+    }
 
     int? parentId;
 
@@ -340,7 +350,7 @@ class PhotoService {
 
     // ✅ single http.post call
     final response = await http.post(
-      Uri.parse('http://192.168.1.11:8000/api/photos/create-folder'),
+      Uri.parse('https://techstrota.cloud/api/photos/create-folder'),
       headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
       body: body,
     );
@@ -390,9 +400,11 @@ class PhotoService {
       return;
     }
 
-    final baseDir = Directory(
-      '/storage/emulated/0/Pictures/MyApp/$companyId/$userId',
-    );
+    final baseDir = await PhotoService.getUserRootDir();
+    if (baseDir == null || !await baseDir.exists()) {
+      // show snackbar
+      return;
+    }
 
     //final baseDir = await PhotoService.getBaseDir();
 
@@ -406,21 +418,28 @@ class PhotoService {
     }
 
     // Collect media files and folder names
-    List<File> files = [];
-    List<String> folderNames = [];
+    List<MapEntry<File, Directory>> fileFolderPairs = [];
 
     for (var entity in baseDir.listSync(recursive: true)) {
       if (entity is File) {
-        final relativeFolder = entity.parent.path.replaceFirst(
-          baseDir.path + '/',
-          '',
-        );
-        folderNames.add(relativeFolder);
-        files.add(entity);
+        final p = entity.path.toLowerCase();
+        if (p.endsWith('.jpg') ||
+            p.endsWith('.jpeg') ||
+            p.endsWith('.png') ||
+            p.endsWith('.mp4') ||
+            p.endsWith('.pdf')) {
+          fileFolderPairs.add(MapEntry(entity, entity.parent));
+        }
       }
     }
 
-    if (files.isEmpty) {
+    // Scan app-specific PDF directory
+    final root = await PhotoService.getUserRootDir();
+    if (root == null) return null;
+
+    final baseStopPath = root.path;
+
+    if (fileFolderPairs.isEmpty) {
       if (!silent && context != null && context.mounted) {
         ScaffoldMessenger.of(
           context,
@@ -431,7 +450,7 @@ class PhotoService {
 
     // Filter only not uploaded
     final notUploadedPairs =
-        List.generate(files.length, (i) => MapEntry(files[i], folderNames[i]))
+        List.generate(fileFolderPairs.length, (i) => fileFolderPairs[i])
             .where(
               (entry) => !PhotoService.uploadedFiles.value.contains(
                 entry.key.absolute.path,
@@ -519,7 +538,7 @@ class PhotoService {
       final selectedCompanyId = prefs.getInt("selected_company_id");
 
       final checkUrl = Uri.parse(
-        'http://192.168.1.11:8000/api/storage-usage?company_id=$selectedCompanyId',
+        'https://techstrota.cloud/api/storage-usage?company_id=$selectedCompanyId',
       );
 
       final checkResponse = await http.get(
@@ -597,12 +616,12 @@ class PhotoService {
 
       // Function to upload a batch (generic)
       Future<bool> uploadBatch(
-        List<MapEntry<File, String>> batch,
+        List<MapEntry<File, Directory>> batch,
         String type,
       ) async {
         final request = http.MultipartRequest(
           'POST',
-          Uri.parse('http://192.168.1.11:8000/api/photos/uploadAll'),
+          Uri.parse('https://techstrota.cloud/api/photos/uploadAll'),
         );
 
         request.headers['Authorization'] = 'Bearer $token';
@@ -610,9 +629,7 @@ class PhotoService {
 
         for (int i = 0; i < batch.length; i++) {
           final file = batch[i].key;
-          final folderPath = batch[i].value;
-
-          final folderDir = Directory(path.join(baseDir.path, folderPath));
+          final folderDir = batch[i].value; // ✅ FIXED
 
           final folderId = await ensureFolderOnServer(
             folderDir: folderDir,
@@ -622,7 +639,7 @@ class PhotoService {
           );
 
           if (folderId == null) {
-            throw Exception('Failed to create folder: $folderPath');
+            throw Exception('Failed to create folder: ${folderDir.path}');
           }
 
           request.fields['folders[$i][folder_id]'] = folderId.toString();

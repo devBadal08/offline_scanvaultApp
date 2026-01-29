@@ -14,18 +14,6 @@ class FileService {
     final dirs = <Directory>[];
     final files = <File>[];
 
-    await for (final entity in folder.list()) {
-      if (entity is Directory) {
-        final sub = entity.path.split('/').last;
-        if (sub.toLowerCase() != mainFolderName.toLowerCase()) {
-          dirs.add(entity);
-        }
-      } else if (entity is File &&
-          (isMedia(entity.path) || isPdf(entity.path))) {
-        files.add(entity);
-      }
-    }
-
     dirs.sort((a, b) => b.statSync().changed.compareTo(a.statSync().changed));
     return {"folders": dirs, "files": files};
   }

@@ -37,13 +37,13 @@ class _SplashScreenState extends State<SplashScreen> {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
 
-    if (sdkInt >= 33) {
-      await [Permission.photos, Permission.videos, Permission.audio].request();
-    } else if (sdkInt >= 30) {
-      await Permission.manageExternalStorage.request();
-    } else {
-      await Permission.storage.request();
-    }
+    // if (sdkInt >= 33) {
+    //   await [Permission.photos, Permission.videos, Permission.audio].request();
+    // } else if (sdkInt >= 30) {
+    //   await Permission.manageExternalStorage.request();
+    // } else {
+    //   await Permission.storage.request();
+    // }
   }
 
   @override

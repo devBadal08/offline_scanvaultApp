@@ -7,39 +7,30 @@ class FolderStatService {
     int videos = 0;
     int pdfs = 0;
 
-    final entities = folder.listSync();
+    try {
+      if (!await folder.exists()) {
+        return {'subfolders': 0, 'images': 0, 'videos': 0, 'pdfs': 0};
+      }
 
-    for (var entity in entities) {
-      if (entity is Directory) {
-        subfolders++;
+      for (final entity in folder.listSync()) {
+        if (entity is Directory) {
+          subfolders++;
+        } else if (entity is File) {
+          final path = entity.path.toLowerCase();
 
-        final subFiles = entity.listSync();
-        for (var file in subFiles) {
-          if (file is File) {
-            final path = file.path.toLowerCase();
-            if (path.endsWith('.jpg') ||
-                path.endsWith('.jpeg') ||
-                path.endsWith('.png')) {
-              images++;
-            } else if (path.endsWith('.mp4')) {
-              videos++;
-            } else if (path.endsWith('.pdf')) {
-              pdfs++;
-            }
+          if (path.endsWith('.jpg') ||
+              path.endsWith('.jpeg') ||
+              path.endsWith('.png')) {
+            images++;
+          } else if (path.endsWith('.mp4')) {
+            videos++;
+          } else if (path.endsWith('.pdf')) {
+            pdfs++;
           }
         }
-      } else if (entity is File) {
-        final path = entity.path.toLowerCase();
-        if (path.endsWith('.jpg') ||
-            path.endsWith('.jpeg') ||
-            path.endsWith('.png')) {
-          images++;
-        } else if (path.endsWith('.mp4')) {
-          videos++;
-        } else if (path.endsWith('.pdf')) {
-          pdfs++;
-        }
       }
+    } catch (e) {
+      print('❌ FolderStatService error: $e');
     }
 
     return {

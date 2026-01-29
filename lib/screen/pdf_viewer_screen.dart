@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:path/path.dart' as p;
 
 class PdfViewerScreen extends StatelessWidget {
   final dynamic pdfFile; // can be File or String (URL)
@@ -21,8 +22,8 @@ class PdfViewerScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           pdfFile is File
-              ? pdfFile.path.split('/').last
-              : pdfFile.toString().split('/').last,
+              ? p.basename(pdfFile.path)
+              : p.basename(pdfFile.toString()),
         ),
         centerTitle: true,
       ),

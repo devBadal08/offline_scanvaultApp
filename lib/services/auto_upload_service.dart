@@ -42,21 +42,6 @@ class AutoUploadService {
     }
   }
 
-  Future<Directory?> _getRootFolder() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('user_id')?.toString();
-    final companyId = prefs.getInt('selected_company_id');
-    if (userId == null) return null;
-
-    if (Platform.isAndroid) {
-      return Directory('/storage/emulated/0/Pictures/MyApp/$companyId/$userId');
-    } else {
-      // iOS: use application documents directory
-      final docDir = await getApplicationDocumentsDirectory();
-      return Directory('${docDir.path}/MyApp/$userId');
-    }
-  }
-
   Future<void> setAutoUpload(bool enabled) async {
     _autoUploadEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
@@ -93,7 +78,7 @@ class AutoUploadService {
         return;
       }
 
-      final root = await _getRootFolder();
+      final root = await PhotoService.getUserRootDir();
       if (root == null) {
         debugPrint("❌ Root folder is null");
         return;

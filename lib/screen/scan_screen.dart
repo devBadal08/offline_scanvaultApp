@@ -7,7 +7,8 @@ import 'package:open_file/open_file.dart';
 import 'package:cunning_document_scanner/ios_options.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:photo_manager/photo_manager.dart'; // Only if saving images/PDF previews to gallery
+import 'package:photo_manager/photo_manager.dart';
+import 'package:photomanager_practice/services/photo_service.dart'; // Only if saving images/PDF previews to gallery
 
 class ScanScreen extends StatefulWidget {
   final Directory? saveFolder;
@@ -83,42 +84,30 @@ class _ScanScreenState extends State<ScanScreen> {
 
   Future<File?> _convertImagesToPdf(List<File> images) async {
     try {
-      // Android permissions
-      if (Platform.isAndroid) {
-        final storageStatus = await Permission.storage.request();
-        if (!storageStatus.isGranted) {
-          final manageStatus = await Permission.manageExternalStorage.request();
-          if (!manageStatus.isGranted) return null;
-        }
-      }
-
       Directory baseDir;
 
-      if (Platform.isAndroid) {
-        // ANDROID STORAGE
-        if (widget.currentFolderPath != null &&
-            widget.currentFolderPath!.isNotEmpty) {
-          baseDir = Directory(widget.currentFolderPath!);
-        } else if (widget.saveFolder != null) {
-          baseDir = widget.saveFolder!;
-        } else {
-          baseDir = Directory(
-            '/storage/emulated/0/Pictures/MyApp/${widget.userId}/${widget.folderName}',
-          );
-        }
+      // 1️⃣ If parent screen passed exact folder → use it
+      if (widget.saveFolder != null) {
+        baseDir = widget.saveFolder!;
       } else {
-        // iOS STORAGE (App Documents folder)
-        final docDir = await getApplicationDocumentsDirectory();
-        baseDir = Directory("${docDir.path}/MyApp/${widget.folderName}");
+        // 2️⃣ Fallback to user root
+        final root = await PhotoService.getUserRootDir();
+        if (root == null) {
+          throw Exception("User root directory not available");
+        }
+        baseDir = root;
       }
 
-      // Ensure folder exists
       if (!await baseDir.exists()) {
         await baseDir.create(recursive: true);
       }
 
-      // Create PDF
+      if (!await baseDir.exists()) {
+        await baseDir.create(recursive: true);
+      }
+
       final pdf = pw.Document();
+
       for (final imgFile in images) {
         final image = pw.MemoryImage(await imgFile.readAsBytes());
         pdf.addPage(
@@ -130,9 +119,9 @@ class _ScanScreenState extends State<ScanScreen> {
         );
       }
 
-      // Save PDF
       final pdfPath =
-          '${baseDir.path}/scanned_${DateTime.now().millisecondsSinceEpoch}.pdf';
+          "${baseDir.path}/scanned_${DateTime.now().millisecondsSinceEpoch}.pdf";
+
       final file = File(pdfPath);
       await file.writeAsBytes(await pdf.save());
 
@@ -140,23 +129,14 @@ class _ScanScreenState extends State<ScanScreen> {
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text("PDF saved at: $pdfPath")));
-
-      // OPTIONAL: Save preview image to iPhone Gallery
-      if (Platform.isIOS) {
-        final bytes = await images.first.readAsBytes();
-        await PhotoManager.editor.saveImage(
-          bytes,
-          filename: "scan_${DateTime.now().millisecondsSinceEpoch}.jpg",
-        );
-      }
+      ).showSnackBar(const SnackBar(content: Text("PDF saved successfully")));
 
       return file;
     } catch (e) {
       debugPrint("PDF conversion error: $e");
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("Failed to save as PDF")));
+      ).showSnackBar(const SnackBar(content: Text("Failed to save PDF")));
       return null;
     }
   }

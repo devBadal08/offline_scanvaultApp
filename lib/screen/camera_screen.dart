@@ -129,18 +129,20 @@ class _CameraScreenState extends State<CameraScreen> {
     Directory baseDir;
 
     if (Platform.isAndroid) {
-      // Your original logic
+      // 1️⃣ If parent screen passed a folder → use it
       if (widget.saveFolder != null) {
         baseDir = widget.saveFolder!;
       } else {
-        baseDir = Directory(
-          '/storage/emulated/0/Pictures/MyApp/${widget.sharedFolderId}',
-        );
+        // 2️⃣ Fallback to app-specific user root
+        final root = await PhotoService.getUserRootDir();
+        if (root == null) {
+          throw Exception("User root directory not available");
+        }
+        baseDir = root;
       }
     } else if (Platform.isIOS) {
-      // iOS ONLY → Safe inside app documents folder
-      baseDir = await getApplicationDocumentsDirectory();
-      baseDir = Directory('${baseDir.path}/MyAppMedia');
+      final docs = await getApplicationDocumentsDirectory();
+      baseDir = Directory('${docs.path}/ScanVaultApp');
     } else {
       baseDir = await getTemporaryDirectory();
     }

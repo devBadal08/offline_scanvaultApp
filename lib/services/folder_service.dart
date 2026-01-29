@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:photomanager_practice/services/photo_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 
 class FolderService {
-  Future<String> loadUserId() async {
+  Future<String?> loadUserId() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('userId') ?? '';
+    return prefs.getString('user_id');
   }
 
   Future<String> loadUserName() async {
@@ -33,23 +34,19 @@ class FolderService {
     int videoCount = 0;
     int pdfCount = 0;
 
-    final baseDir = await _getBaseFolder();
-    if (baseDir == null || !await baseDir.exists()) {
-      return {'folders': 0, 'images': 0, 'videos': 0, 'pdfs': 0};
-    }
+    final root = await PhotoService.getUserRootDir();
+    if (root == null) return {};
 
-    for (final entity in baseDir.listSync(recursive: true)) {
+    for (final entity in root.listSync(recursive: true)) {
       if (entity is Directory) {
         folderCount++;
       } else if (entity is File) {
-        final path = entity.path.toLowerCase();
-        if (path.endsWith('.jpg') ||
-            path.endsWith('.jpeg') ||
-            path.endsWith('.png')) {
+        final p = entity.path.toLowerCase();
+        if (p.endsWith('.jpg') || p.endsWith('.jpeg') || p.endsWith('.png')) {
           imageCount++;
-        } else if (path.endsWith('.mp4')) {
+        } else if (p.endsWith('.mp4')) {
           videoCount++;
-        } else if (path.endsWith('.pdf')) {
+        } else if (p.endsWith('.pdf')) {
           pdfCount++;
         }
       }
@@ -64,40 +61,36 @@ class FolderService {
   }
 
   Future<Map<String, int>> countSubfoldersImagesVideos(Directory folder) async {
-    int subfolderCount = 0;
-    int imageCount = 0;
-    int videoCount = 0;
-    int pdfCount = 0;
+    int subfolders = 0;
+    int images = 0;
+    int videos = 0;
+    int pdfs = 0;
 
-    final List<FileSystemEntity> entities = folder.listSync();
-
-    for (final entity in entities) {
+    for (final entity in folder.listSync()) {
       if (entity is Directory) {
-        subfolderCount++;
+        subfolders++;
       } else if (entity is File) {
-        final path = entity.path.toLowerCase();
-        if (path.endsWith('.jpg') ||
-            path.endsWith('.jpeg') ||
-            path.endsWith('.png')) {
-          imageCount++;
-        } else if (path.endsWith('.mp4')) {
-          videoCount++;
-        } else if (path.endsWith('.pdf')) {
-          pdfCount++;
+        final p = entity.path.toLowerCase();
+        if (p.endsWith('.jpg') || p.endsWith('.jpeg') || p.endsWith('.png')) {
+          images++;
+        } else if (p.endsWith('.mp4')) {
+          videos++;
+        } else if (p.endsWith('.pdf')) {
+          pdfs++;
         }
       }
     }
 
     return {
-      'subfolders': subfolderCount,
-      'images': imageCount,
-      'videos': videoCount,
-      'pdfs': pdfCount,
+      'subfolders': subfolders,
+      'images': images,
+      'videos': videos,
+      'pdfs': pdfs,
     };
   }
 
   Future<List<Directory>> loadFolders() async {
-    final baseDir = await _getBaseFolder();
+    final baseDir = await PhotoService.getUserRootDir();
     if (baseDir == null) return [];
 
     if (!await baseDir.exists()) {
@@ -108,7 +101,7 @@ class FolderService {
   }
 
   Future<bool> createFolder(String folderName) async {
-    final baseDir = await _getBaseFolder();
+    final baseDir = await PhotoService.getUserRootDir();
     if (baseDir == null) return false;
 
     if (!await baseDir.exists()) {
@@ -121,21 +114,6 @@ class FolderService {
 
     await dir.create(recursive: true);
     return true;
-  }
-
-  Future<Directory?> _getBaseFolder() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('user_id');
-    final companyId = prefs.getInt('selected_company_id');
-
-    if (userId == null || companyId == null) return null;
-
-    if (Platform.isAndroid) {
-      return Directory('/storage/emulated/0/Pictures/MyApp/$companyId/$userId');
-    } else {
-      final docDir = await getApplicationDocumentsDirectory();
-      return Directory('${docDir.path}/MyApp/$companyId/$userId');
-    }
   }
 
   Future<void> logoutUser() async {
@@ -281,38 +259,6 @@ class FolderService {
 
     print('⚠️ NO MATCH FOUND → returning null');
     return null;
-  }
-
-  Future<bool> renameFolderOnServer({
-    required int folderId,
-    required String newName,
-  }) async {
-    final token = await getAuthToken();
-
-    final prefs = await SharedPreferences.getInstance();
-    final companyId = prefs.getInt('selected_company_id');
-
-    print('🧪 RENAME API DEBUG');
-    print('➡️ folderId = $folderId (${folderId.runtimeType})');
-    print('➡️ newName = $newName');
-    print('➡️ companyId = $companyId');
-    print('➡️ token exists = ${token != null}');
-    //print('➡️ URL = $baseUrl/folder/$folderId/rename');
-
-    final response = await http.put(
-      Uri.parse('http://192.168.1.11:8000/api/folders/$folderId/rename'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'name': newName, 'company_id': companyId}),
-    );
-
-    print('📝 Rename status: ${response.statusCode}');
-    print('📝 Rename response: ${response.body}');
-
-    return response.statusCode == 200;
   }
 
   static Future<void> updateFolderMetaName(int folderId, String newName) async {

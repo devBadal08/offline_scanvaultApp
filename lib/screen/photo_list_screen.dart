@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:photomanager_practice/helpers/dialog_helpers.dart';
 import 'package:photomanager_practice/screen/camera_screen.dart';
 import 'package:photomanager_practice/screen/gallery_screen.dart';
@@ -119,7 +120,7 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
   List<dynamic> images = [];
 
   bool isMedia(String filePath) {
-    final mediaExtensions = ['jpg', 'jpeg', 'png', 'mp4', 'pdf'];
+    final mediaExtensions = ['jpg', 'jpeg', 'png', 'mp4'];
     final extension = filePath.split('.').last.toLowerCase();
     return mediaExtensions.contains(extension);
   }
@@ -135,11 +136,6 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
   }
 
   Future<void> _loadSharedPhotos(int folderId, {String? subfolderPath}) async {
-    final dir = Directory(
-      '/storage/emulated/0/Pictures/MyApp/Shared/$folderId',
-    );
-    if (!await dir.exists()) await dir.create(recursive: true);
-
     final uploadedSet = PhotoService.uploadedFiles.value;
 
     final filteredNewPhotos = _newlyTakenPhotos.where((p) {
@@ -322,35 +318,35 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
     if (folder == null || !await folder.exists()) return;
 
     final dirs = <Directory>[];
-    final files = <File>[];
+    final images = <File>[];
+    final pdfs = <File>[];
 
-    await for (final entity in folder.list()) {
+    for (final entity in folder.listSync()) {
       if (entity is Directory) {
-        final sub = entity.path.split('/').last;
-        if (sub.toLowerCase() != _mainFolderName.toLowerCase()) {
-          dirs.add(entity);
-        }
+        dirs.add(entity);
       } else if (entity is File) {
-        if (isMedia(entity.path) || isPdf(entity.path)) {
-          files.add(entity);
+        final p = entity.path.toLowerCase();
+        if (p.endsWith('.pdf')) {
+          pdfs.add(entity);
+        } else if (p.endsWith('.jpg') ||
+            p.endsWith('.jpeg') ||
+            p.endsWith('.png') ||
+            p.endsWith('.mp4')) {
+          images.add(entity);
         }
-      }
-      if (isPdf(entity.path)) {
-        print("📘 Found PDF: ${entity.path}");
       }
     }
 
-    dirs.sort((a, b) => b.statSync().changed.compareTo(a.statSync().changed));
     if (!mounted) return;
 
     setState(() {
       folderItems = dirs;
-      imageItems = files; // now contains images + videos + PDFs
-      pdfFiles = files.where((f) => isPdf(f.path)).toList();
-      items = [...dirs, ...files];
+      imageItems = images;
+      pdfFiles = pdfs;
       filteredFolders = List.from(dirs);
-      print("📑 Found PDFs: ${pdfFiles.map((f) => f.path).toList()}");
     });
+
+    print("📑 Found PDFs: ${pdfFiles.map((f) => f.path).toList()}");
   }
 
   void _filterItems(String query) {
@@ -432,22 +428,6 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
                 print('➡️ Folder name = ${folder.path.split('/').last}');
                 print('➡️ Returned folderId = $folderId');
 
-                if (folderId != null) {
-                  final success = await FolderService().renameFolderOnServer(
-                    folderId: folderId,
-                    newName: newName,
-                  );
-
-                  if (!success) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Server rename failed')),
-                    );
-                    return;
-                  }
-
-                  await FolderService.updateFolderMetaName(folderId, newName);
-                }
-
                 // rename locally only AFTER server success
                 await folder.rename(newPath);
                 _loadItems();
@@ -465,22 +445,52 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
   }
 
   Future<void> _deleteFolder(Directory folder) async {
-    final shouldDelete = await DialogHelpers.showConfirmDialog(
-      context,
-      title: "Delete Folder",
-      message: "Are you sure you want to delete this folder?",
+    final canDelete = await PhotoService.isFolderFullyUploadedLocally(folder);
+
+    if (!canDelete) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Some photos are not uploaded yet. Upload first.'),
+        ),
+      );
+      return;
+    }
+
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove from device'),
+        content: const Text(
+          'All photos are uploaded.\n'
+          'This will remove the folder only from your phone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
     );
 
-    if (!mounted || !shouldDelete) return;
+    if (shouldDelete != true) return;
 
     try {
-      await folder.delete(recursive: true);
-      _loadItems();
+      if (await folder.exists()) {
+        await folder.delete(recursive: true);
+      } else {
+        debugPrint('⚠️ Folder already deleted: ${folder.path}');
+      }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error deleting folder: $e')));
+      debugPrint('❌ Folder delete failed: $e');
     }
+
+    _loadItems();
+    countSubfoldersAndImages(widget.folder!.path);
   }
 
   Future<void> _shareSubFolder(Directory subfolder) async {
@@ -798,8 +808,8 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => ScanScreen(
-          saveFolder: widget.folder,
           userId: widget.userId,
+          saveFolder: widget.folder,
           folderName: widget.folder != null
               ? widget.folder!.path.split('/').last
               : '',
@@ -1267,58 +1277,13 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
                 await _openScanScreen(); // call the async function, but closure itself is not async
               },
               onUploadTap: () async {
-                if (widget.isShared && widget.sharedFolderId != null) {
-                  final dir = Directory(
-                    '/storage/emulated/0/Pictures/MyApp/${widget.sharedFolderId}',
+                if (widget.isShared) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Shared folder upload is server-based"),
+                    ),
                   );
-
-                  if (!await dir.exists()) return;
-
-                  final uploadImages = <File>[];
-                  final uploadPdfs = <File>[];
-
-                  for (var entity in dir.listSync(recursive: true)) {
-                    if (entity is File) {
-                      if (isMedia(entity.path)) {
-                        uploadImages.add(entity);
-                      } else if (isPdf(entity.path)) {
-                        uploadPdfs.add(entity);
-                      }
-                    }
-                  }
-
-                  if (uploadImages.isEmpty && uploadPdfs.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("No images or PDFs found to upload"),
-                      ),
-                    );
-                    return;
-                  }
-
-                  final service = FolderShareService();
-                  final success = await service.uploadToSharedFolder(
-                    context,
-                    widget.sharedFolderId!,
-                    uploadImages, // only images
-                    uploadPdfs, // only PDFs
-                  );
-
-                  if (success) {
-                    for (var file in [...uploadImages, ...uploadPdfs]) {
-                      final index = _newlyTakenPhotos.indexWhere(
-                        (p) => p['path'] == file.path,
-                      );
-                      if (index != -1)
-                        _newlyTakenPhotos[index]['local'] = false;
-                    }
-
-                    await _loadSharedPhotos(widget.sharedFolderId!);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Upload failed")),
-                    );
-                  }
+                  return;
                 } else {
                   // Personal folder upload
                   await PhotoService.uploadImagesToServer(

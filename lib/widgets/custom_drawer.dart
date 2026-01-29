@@ -282,7 +282,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
     final token = prefs.getString("auth_token");
     final userId = prefs.getString("user_id");
 
-    final uri = Uri.parse("http://192.168.1.11:8000/api/upload-selfie");
+    final uri = Uri.parse("https://techstrota.cloud/api/upload-selfie");
 
     final request = http.MultipartRequest("POST", uri);
     request.headers["Authorization"] = "Bearer $token";
@@ -320,7 +320,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
 
     if (token == null) return;
 
-    final uri = Uri.parse("http://192.168.1.11:8000/api/remove-profile-photo");
+    final uri = Uri.parse("https://techstrota.cloud/api/remove-profile-photo");
 
     final response = await http.post(
       uri,
@@ -436,59 +436,62 @@ class _CustomDrawerState extends State<CustomDrawer> {
 
   Future<void> _deleteAllImages() async {
     try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String? userId = prefs.getString('user_id')?.toString();
-      Directory directory;
+      final prefs = await SharedPreferences.getInstance();
+      final userId = prefs.getString('user_id');
+      final companyId = prefs.getInt('selected_company_id');
+
+      if (userId == null || companyId == null) return;
+
+      Directory rootDir;
 
       if (Platform.isAndroid) {
-        directory = Directory("/storage/emulated/0/Pictures/MyApp/$userId");
+        final base = await getExternalStorageDirectory();
+        if (base == null) return;
+        rootDir = Directory('${base.path}/ScanVaultApp/$companyId/$userId');
       } else {
-        // iOS: Use documents directory
         final docDir = await getApplicationDocumentsDirectory();
-        directory = Directory("${docDir.path}/MyApp/$userId");
+        rootDir = Directory('${docDir.path}/ScanVaultApp/$companyId/$userId');
       }
 
       final uploaded = await _getUploadedFiles();
 
-      if (await directory.exists()) {
-        int deleted = 0, skipped = 0;
+      if (!await rootDir.exists()) {
+        ScaffoldMessenger.of(widget.parentContext).showSnackBar(
+          const SnackBar(content: Text("No files found to delete")),
+        );
+        return;
+      }
 
-        await for (var entity in directory.list(recursive: true)) {
-          if (entity is File) {
-            final path = entity.path;
+      int deleted = 0;
+      int skipped = 0;
 
-            if (path.endsWith(".jpg") ||
-                path.endsWith(".jpeg") ||
-                path.endsWith(".png")) {
-              if (uploaded.contains(path)) {
-                await entity.delete();
-                deleted++;
-              } else {
-                skipped++;
-              }
+      await for (final entity in rootDir.list(recursive: true)) {
+        if (entity is File) {
+          final path = entity.path.toLowerCase();
+
+          if (path.endsWith('.jpg') ||
+              path.endsWith('.jpeg') ||
+              path.endsWith('.png')) {
+            if (uploaded.contains(entity.path)) {
+              await entity.delete();
+              deleted++;
+            } else {
+              skipped++;
             }
           }
         }
+      }
 
-        if (widget.onDelete != null) {
-          widget.onDelete!();
-        }
+      widget.onDelete?.call();
 
-        if (mounted) {
-          ScaffoldMessenger.of(widget.parentContext).showSnackBar(
-            SnackBar(
-              content: Text(
-                "Deleted $deleted photos. Skipped $skipped not uploaded.",
-              ),
+      if (mounted) {
+        ScaffoldMessenger.of(widget.parentContext).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Deleted $deleted photos. Skipped $skipped not uploaded.",
             ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(widget.parentContext).showSnackBar(
-            const SnackBar(content: Text("No images found to delete")),
-          );
-        }
+          ),
+        );
       }
     } catch (e) {
       debugPrint("❌ Error deleting images: $e");

@@ -41,15 +41,10 @@ class PDFGridCards extends StatelessWidget {
         final pdfPath = pdf is File ? pdf.path : pdf['url'] ?? pdf['path'];
         final isSelected = selectedImages.contains(pdfPath);
 
-        final bool isShared =
-            pdf is Map &&
-            ((pdf['url'] != null &&
-                    (pdf['url'] as String).startsWith('http')) ||
-                !(pdfPath.toString().startsWith('/storage')));
+        final bool isLocalPdf = pdf is File;
+        final bool isSharedPdf = pdf is Map && pdf['url'] != null;
 
-        final String? pdfUrl = isShared
-            ? (pdf['url'] ?? "http://192.168.1.11:8000/storage/${pdf['path']}")
-            : null;
+        final String? pdfUrl = isSharedPdf ? pdf['url'] as String : null;
 
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 8),
@@ -80,7 +75,7 @@ class PDFGridCards extends StatelessWidget {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
-            trailing: isShared
+            trailing: isSharedPdf
                 ? null
                 : IconButton(
                     icon: const Icon(Icons.edit_note, color: Colors.blueAccent),
@@ -92,7 +87,7 @@ class PDFGridCards extends StatelessWidget {
               if (selectionMode) {
                 onSelectToggle(pdfPath);
               } else {
-                if (isShared) {
+                if (isSharedPdf) {
                   Navigator.push(
                     context,
                     MaterialPageRoute(

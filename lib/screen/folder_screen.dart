@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:photomanager_practice/screen/scan_screen.dart';
 import 'package:photomanager_practice/services/bottom_tabs.dart';
 import 'package:photomanager_practice/services/folder_share_service.dart';
+import 'package:photomanager_practice/services/photo_service.dart';
 import 'package:photomanager_practice/widgets/custom_drawer.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -132,7 +133,7 @@ class _FolderScreenState extends State<FolderScreen>
       }
 
       final url = Uri.parse(
-        'http://192.168.1.11:8000/api/storage-usage?company_id=$companyId',
+        'https://techstrota.cloud/api/storage-usage?company_id=$companyId',
       );
 
       final token = await folderService.getAuthToken();
@@ -404,22 +405,6 @@ class _FolderScreenState extends State<FolderScreen>
                 return;
               }
 
-              // server rename first
-              final success = await folderService.renameFolderOnServer(
-                folderId: folderId,
-                newName: newName,
-              );
-
-              if (!success) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Failed to rename folder on server'),
-                  ),
-                );
-                return;
-              }
-
               // local rename
               await folder.rename(newPath);
 
@@ -562,11 +547,25 @@ class _FolderScreenState extends State<FolderScreen>
   }
 
   Future<void> _deleteFolder(Directory folder) async {
+    final canDelete = await PhotoService.isFolderFullyUploadedLocally(folder);
+
+    if (!canDelete) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Some photos are not uploaded yet. Upload first.'),
+        ),
+      );
+      return;
+    }
+
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Folder'),
-        content: const Text('Are you sure you want to delete this folder?'),
+        title: const Text('Remove from device'),
+        content: const Text(
+          'All photos are uploaded.\n'
+          'This will remove the folder only from your phone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -574,22 +573,26 @@ class _FolderScreenState extends State<FolderScreen>
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: const Text('Remove'),
           ),
         ],
       ),
     );
 
-    if (shouldDelete == true) {
-      try {
+    if (shouldDelete != true) return;
+
+    try {
+      if (await folder.exists()) {
         await folder.delete(recursive: true);
-        _loadFolders(); // Refresh UI
-      } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error deleting folder: $e')));
+      } else {
+        debugPrint('⚠️ Folder already deleted: ${folder.path}');
       }
+    } catch (e) {
+      debugPrint('❌ Folder delete failed: $e');
     }
+
+    await _loadFolders();
+    await _countFoldersAndImages();
   }
 
   @override
@@ -676,6 +679,7 @@ class _FolderScreenState extends State<FolderScreen>
                 folders.isNotEmpty
                     ? ScanScreen(
                         userId: widget.userId,
+                        saveFolder: selectedFolder,
                         folderName: folders.first.path.split('/').last,
                       )
                     : const Center(child: Text("No folder selected")),
