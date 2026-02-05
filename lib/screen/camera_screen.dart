@@ -129,11 +129,23 @@ class _CameraScreenState extends State<CameraScreen> {
     Directory baseDir;
 
     if (Platform.isAndroid) {
-      // 1️⃣ If parent screen passed a folder → use it
-      if (widget.saveFolder != null) {
+      // ✅ SHARED FOLDER → isolate storage
+      if (widget.sharedFolderId != null) {
+        final root = await getExternalStorageDirectory();
+        if (root == null) {
+          throw Exception("External storage not available");
+        }
+
+        baseDir = Directory(
+          '${root.path}/ScanVaultApp/shared/${widget.sharedFolderId}',
+        );
+      }
+      // ✅ PERSONAL FOLDER
+      else if (widget.saveFolder != null) {
         baseDir = widget.saveFolder!;
-      } else {
-        // 2️⃣ Fallback to app-specific user root
+      }
+      // fallback (safety)
+      else {
         final root = await PhotoService.getUserRootDir();
         if (root == null) {
           throw Exception("User root directory not available");

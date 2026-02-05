@@ -295,6 +295,43 @@ class PhotoService {
     return null;
   }
 
+  static Future<bool> canUploadMore({
+    bool silent = false,
+    BuildContext? context,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    final companyId = prefs.getInt('selected_company_id');
+
+    if (token == null || companyId == null) return false;
+
+    final res = await http.get(
+      Uri.parse(
+        'https://techstrota.cloud/api/storage-usage?company_id=$companyId',
+      ),
+      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+    );
+
+    if (res.statusCode != 200) return false;
+
+    final data = jsonDecode(res.body);
+    final percent = (data['percent_used'] ?? 0).toDouble();
+
+    if (percent >= 99) {
+      if (!silent && context != null && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("❌ Storage full. Upload blocked."),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return false;
+    }
+
+    return true;
+  }
+
   static Future<int?> ensureFolderOnServer({
     required Directory folderDir,
     required int companyId,
@@ -376,6 +413,13 @@ class PhotoService {
     BuildContext? context,
     bool silent = false,
   }) async {
+    final allowed = await canUploadMore(silent: silent, context: context);
+
+    if (!allowed) {
+      debugPrint("🚫 Upload blocked due to storage limit");
+      return;
+    }
+
     await PhotoService.loadUploadedFiles();
     final prefs = await SharedPreferences.getInstance();
     final userId = prefs.getString('user_id');

@@ -5,7 +5,9 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/src/widgets/framework.dart';
 import 'package:path/path.dart';
+import 'package:photomanager_practice/services/background_upload_worker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
 import 'photo_service.dart';
 import 'bottom_tabs.dart';
 import 'package:path_provider/path_provider.dart';
@@ -40,6 +42,22 @@ class AutoUploadService {
             current == ConnectivityResult.mobile)) {
       _uploadPendingImages(); // private
     }
+  }
+
+  Future<void> enableBackgroundUpload() async {
+    await Workmanager().registerPeriodicTask(
+      "upload-task-1", // unique ID
+      uploadTask, // task name
+      frequency: const Duration(minutes: 15), // Android minimum
+      //existingWorkPolicy: ExistingWorkPolicy.keep,
+      constraints: Constraints(
+        networkType: NetworkType.connected, // only when internet
+      ),
+    );
+  }
+
+  Future<void> disableBackgroundUpload() async {
+    await Workmanager().cancelAll();
   }
 
   Future<void> setAutoUpload(bool enabled) async {

@@ -390,7 +390,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
       final current = await Connectivity().checkConnectivity();
       if (current == ConnectivityResult.wifi ||
           current == ConnectivityResult.mobile) {
-        await AutoUploadService.instance.setAutoUpload(true);
+        await AutoUploadService.instance.enableBackgroundUpload();
       }
     }
   }
@@ -411,7 +411,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
         if (_autoUploadEnabled &&
             (result == ConnectivityResult.wifi ||
                 result == ConnectivityResult.mobile)) {
-          await AutoUploadService.instance.setAutoUpload(true);
+          await AutoUploadService.instance.enableBackgroundUpload();
         }
       }
     });

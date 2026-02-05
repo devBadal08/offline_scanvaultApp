@@ -21,12 +21,22 @@ class SharedWithMeScreen extends StatelessWidget {
 
           final sharedFolders = snapshot.data!;
 
+          print("📦 Shared folders raw data:");
+          for (final f in sharedFolders) {
+            print(f);
+          }
+
           return ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: sharedFolders.length,
             itemBuilder: (context, index) {
               final folder = sharedFolders[index];
-              final realFolder = folder['folder'];
+              final realFolder = folder; // the item itself
+              final sharedBy = folder['shared_by'];
+
+              if (realFolder == null) {
+                return const SizedBox(); // skip broken share
+              }
 
               return Card(
                 margin: const EdgeInsets.symmetric(vertical: 8),
@@ -42,9 +52,8 @@ class SharedWithMeScreen extends StatelessWidget {
                   ),
 
                   title: Text(realFolder?['name'] ?? 'Unnamed Folder'),
-                  subtitle: Text(
-                    "Owner ID: ${realFolder?['user_id'] ?? 'Unknown'}",
-                  ),
+
+                  subtitle: Text("Shared by: ${sharedBy ?? 'Unknown'}"),
 
                   onTap: () {
                     Navigator.push(
@@ -52,9 +61,10 @@ class SharedWithMeScreen extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (context) => PhotoListScreen(
                           isShared: true,
-                          sharedFolderId: realFolder['id'],
-                          sharedFolderName: realFolder['path'],
+                          sharedFolderId: realFolder['id'] as int,
+                          sharedFolderName: realFolder['path'] as String,
                           userId: realFolder['user_id'].toString(),
+                          canWrite: folder['access_type'] == 'write',
                         ),
                       ),
                     );

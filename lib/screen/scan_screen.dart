@@ -86,16 +86,32 @@ class _ScanScreenState extends State<ScanScreen> {
     try {
       Directory baseDir;
 
-      // 1️⃣ If parent screen passed exact folder → use it
-      if (widget.saveFolder != null) {
+      // ✅ SHARED FOLDER PDF
+      if (widget.sharedFolderId != null) {
+        final root = await getExternalStorageDirectory();
+        if (root == null) {
+          throw Exception("External storage not available");
+        }
+
+        baseDir = Directory(
+          '${root.path}/ScanVaultApp/shared/${widget.sharedFolderId}',
+        );
+      }
+      // ✅ PERSONAL FOLDER PDF
+      else if (widget.saveFolder != null) {
         baseDir = widget.saveFolder!;
-      } else {
-        // 2️⃣ Fallback to user root
+      }
+      // fallback safety
+      else {
         final root = await PhotoService.getUserRootDir();
         if (root == null) {
           throw Exception("User root directory not available");
         }
         baseDir = root;
+      }
+
+      if (!await baseDir.exists()) {
+        await baseDir.create(recursive: true);
       }
 
       if (!await baseDir.exists()) {

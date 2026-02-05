@@ -35,6 +35,7 @@ class PhotoListScreen extends StatefulWidget {
   final String userId;
   final Directory? selectedFolder;
   final int? folderBackendId; // ✅ ADD THIS
+  final bool canWrite;
 
   const PhotoListScreen({
     super.key,
@@ -45,6 +46,7 @@ class PhotoListScreen extends StatefulWidget {
     required this.userId,
     this.selectedFolder,
     this.folderBackendId,
+    this.canWrite = true,
   });
 
   @override
@@ -68,11 +70,11 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
   bool isSearching = false;
   String searchQuery = '';
   List<Directory> filteredFolders = [];
-  List<Map<String, dynamic>> _newlyTakenPhotos = [];
+  List<Map<String, dynamic>> _sharedPendingFiles = [];
   List<Map<String, dynamic>> apiFolders = [];
 
   String get _mainFolderName => widget.isShared
-      ? (widget.sharedFolderName ?? "Shared Folder")
+      ? (widget.sharedFolderName?.split('/').last ?? "Shared Folder")
       : (widget.folder?.path.split('/').last ?? "Unnamed Folder");
 
   @override
@@ -84,19 +86,13 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
       "🔍 isShared=${widget.isShared}, sharedFolderId=${widget.sharedFolderId}",
     );
 
-    if (widget.isShared) {
-      if (widget.sharedFolderName != null &&
-          widget.sharedFolderName!.contains('/')) {
-        _loadSharedPhotos(
-          widget.sharedFolderId ?? 0,
-          subfolderPath: widget.sharedFolderName,
-        );
-      } else if (widget.sharedFolderId != null) {
-        _loadSharedPhotos(widget.sharedFolderId!);
-      }
-    } else if (widget.folder != null) {
-      _loadItems();
-      countSubfoldersAndImages(widget.folder!.path);
+    if (widget.isShared && widget.sharedFolderId != null) {
+      _loadSharedPhotos(
+        widget.sharedFolderId!,
+        subfolderPath: widget.sharedFolderName,
+      );
+    } else {
+      _loadItems(); // ✅ THIS WAS MISSING
     }
 
     _triggerAutoUploadIfEnabled();
@@ -135,17 +131,30 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
     return videoExtensions.contains(extension);
   }
 
+  void _addSharedPendingFile(String path) {
+    final exists = _sharedPendingFiles.any((e) => e['path'] == path);
+    if (!exists) {
+      _sharedPendingFiles.add({"path": path, "local": true});
+    }
+  }
+
   Future<void> _loadSharedPhotos(int folderId, {String? subfolderPath}) async {
+    setState(() {
+      apiPhotos = [];
+      apiPdfFiles = [];
+      apiFolders = [];
+    });
+
     final uploadedSet = PhotoService.uploadedFiles.value;
 
-    final filteredNewPhotos = _newlyTakenPhotos.where((p) {
-      return p['local'] == true && !uploadedSet.contains(p['path']);
+    final filteredNewPhotos = _sharedPendingFiles.where((p) {
+      final name = p['path'].split('/').last.toLowerCase();
+      return p['local'] == true &&
+          !uploadedSet.any((u) => u.toLowerCase().endsWith(name));
     }).toList();
 
     final service = FolderShareService();
-    final data = subfolderPath != null
-        ? await service.getSharedFolderByPath(subfolderPath)
-        : await service.getSharedFolderPhotos(folderId);
+    final data = await service.getSharedFolderPhotos(folderId);
 
     // Declare list BEFORE using
     final imagesAndVideos = <Map<String, dynamic>>[];
@@ -161,6 +170,20 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
         );
       }
 
+      // videos
+      if (data['videos'] != null) {
+        imagesAndVideos.addAll(
+          List<Map<String, dynamic>>.from(data['videos']).map(
+            (v) => {
+              "path": v['path'],
+              "url": v['url'],
+              "local": false,
+              "type": "video", // helpful later
+            },
+          ),
+        );
+      }
+
       // PDFs (backend should return "pdfs" or update endpoint)
       if (data['pdfs'] != null) {
         pdfs.addAll(
@@ -172,7 +195,16 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
 
       // subfolders
       if (data['folders'] != null) {
-        apiFolders = List<Map<String, dynamic>>.from(data['folders']);
+        apiFolders = List<Map<String, dynamic>>.from(data['folders']).map((
+          item,
+        ) {
+          return {
+            'id': item['id'], // REAL folder id
+            'name': item['name'],
+            'path': item['path'], // FULL path from backend
+            'access_type': item['access_type'],
+          };
+        }).toList();
       }
     }
 
@@ -207,6 +239,9 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
         finalImagesAndVideos.add(item);
       }
     }
+
+    print("📂 sharedFolderId = $folderId");
+    print("📂 subfolderPath = $subfolderPath");
 
     setState(() {
       apiPhotos = finalImagesAndVideos;
@@ -293,7 +328,7 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
       if (widget.isShared) {
         for (var path in capturedPaths) {
           if (!PhotoService.uploadedFiles.value.contains(path)) {
-            _newlyTakenPhotos.add({"path": path, "local": true});
+            _addSharedPendingFile(path);
           }
         }
         _loadSharedPhotos(widget.sharedFolderId!);
@@ -815,18 +850,16 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
               : '',
           sharedFolderId: widget.sharedFolderId, // pass shared folder ID if any
           onPdfCreated: (pdf) {
-            // Refresh UI depending on folder type
-            if (widget.sharedFolderId != null) {
+            if (widget.isShared) {
+              _addSharedPendingFile(pdf.path);
+
               _loadSharedPhotos(widget.sharedFolderId!);
             } else {
               _loadItems();
             }
 
-            // Optionally insert PDF locally for immediate view
             setState(() {
-              imageItems.insert(0, pdf);
               pdfFiles.insert(0, pdf);
-              items = [...folderItems, ...imageItems];
             });
           },
         ),
@@ -1121,6 +1154,7 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
                       ? SharedFolderList(
                           folders: apiFolders,
                           userId: widget.userId,
+                          currentPath: widget.sharedFolderName,
                         )
                       : (folderItems.isEmpty
                             ? Center(
@@ -1270,29 +1304,76 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
               showCamera: true,
               scanDisabled: false,
               onCreateFolder: (int index) {
+                if (widget.isShared && !widget.canWrite) return;
                 if (index == 4) _showCreateSubFolderDialog();
               },
-              onCameraTap: _takePhoto,
+              onCameraTap: widget.isShared && !widget.canWrite
+                  ? null
+                  : _takePhoto,
               onScanTap: () async {
                 await _openScanScreen(); // call the async function, but closure itself is not async
               },
               onUploadTap: () async {
+                // ================= SHARED FOLDER =================
                 if (widget.isShared) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Shared folder upload is server-based"),
-                    ),
-                  );
+                  if (!widget.canWrite) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "You have read-only access to this folder",
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+
+                  // ✅ Collect new local files created in shared folder
+                  final imageFiles = <File>[];
+                  final pdfFiles = <File>[];
+
+                  for (final item in _sharedPendingFiles) {
+                    final path = item['path'] as String;
+                    final file = File(path);
+
+                    if (!file.existsSync()) continue;
+
+                    if (path.toLowerCase().endsWith('.pdf')) {
+                      pdfFiles.add(file);
+                    } else {
+                      imageFiles.add(file);
+                    }
+                  }
+
+                  if (imageFiles.isEmpty && pdfFiles.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("No new files to upload")),
+                    );
+                    return;
+                  }
+
+                  // ✅ Upload to shared folder
+                  final success = await FolderShareService()
+                      .uploadToSharedFolder(
+                        context,
+                        widget.sharedFolderId!,
+                        imageFiles,
+                        pdfFiles,
+                      );
+
+                  if (success) {
+                    _sharedPendingFiles.clear(); // ✅ important
+                    await _loadSharedPhotos(widget.sharedFolderId!);
+                  }
+
                   return;
-                } else {
-                  // Personal folder upload
-                  await PhotoService.uploadImagesToServer(
-                    null,
-                    context: context,
-                  );
-                  _loadItems();
                 }
+
+                // ================= PERSONAL FOLDER =================
+                await PhotoService.uploadImagesToServer(null, context: context);
+
+                _loadItems();
               },
+
               onUploadComplete: () {
                 setState(() {
                   _loadItems(); // ✅ re-scan folders and update counts

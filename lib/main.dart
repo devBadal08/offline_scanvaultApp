@@ -7,11 +7,19 @@ import 'package:photomanager_practice/services/auto_upload_service.dart';
 import 'package:provider/provider.dart';
 import 'package:photomanager_practice/provider/theme_provider.dart';
 import 'package:photomanager_practice/screen/splash_screen.dart';
+import 'package:workmanager/workmanager.dart';
+import 'package:photomanager_practice/services/background_upload_worker.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Auto-upload service
+  // ✅ Initialize WorkManager FIRST
+  await Workmanager().initialize(
+    callbackDispatcher,
+    isInDebugMode: false, // set true only while testing
+  );
+
+  // ✅ Your existing auto-upload service stays
   await AutoUploadService.instance.init();
 
   runApp(

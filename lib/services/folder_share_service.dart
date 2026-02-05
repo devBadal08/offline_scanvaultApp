@@ -127,11 +127,20 @@ class FolderShareService {
     final sharedData = await getSharedFolderPhotos(folderId);
     final Set<String> uploadedBasenames = {};
 
-    if (sharedData != null && sharedData['photos'] != null) {
-      for (var p in sharedData['photos']) {
-        final path = p['path']?.toString();
-        if (path != null) uploadedBasenames.add(normalizeFileName(path));
+    void collectUploaded(List? list) {
+      if (list == null) return;
+      for (var item in list) {
+        final path = item['path']?.toString();
+        if (path != null) {
+          uploadedBasenames.add(normalizeFileName(path));
+        }
       }
+    }
+
+    if (sharedData != null) {
+      collectUploaded(sharedData['photos']);
+      collectUploaded(sharedData['videos']);
+      collectUploaded(sharedData['pdfs']); // ✅ THIS WAS MISSING
     }
 
     // Combine images + PDFs for checking

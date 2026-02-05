@@ -4,11 +4,13 @@ import 'package:photomanager_practice/screen/photo_list_screen.dart';
 class SharedFolderList extends StatelessWidget {
   final List<Map<String, dynamic>> folders;
   final String userId;
+  final String? currentPath;
 
   const SharedFolderList({
     super.key,
     required this.folders,
     required this.userId,
+    this.currentPath,
   });
 
   @override
@@ -57,9 +59,10 @@ class SharedFolderList extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (_) => PhotoListScreen(
                     isShared: true,
-                    sharedFolderId: folder['id'],
-                    sharedFolderName: folder['path'],
+                    sharedFolderId: folder['id'], // ✅ this folder’s real id
+                    sharedFolderName: folder['name'], // UI only
                     userId: userId,
+                    canWrite: folder['access_type'] == 'write',
                   ),
                 ),
               );
