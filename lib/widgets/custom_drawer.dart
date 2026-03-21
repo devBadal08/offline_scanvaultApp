@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:photomanager_practice/screen/folder_screen.dart';
 import 'package:photomanager_practice/screen/shared_with_me_screen.dart';
 import 'package:photomanager_practice/services/auto_upload_service.dart';
+import 'package:photomanager_practice/services/backup_service.dart';
 import 'package:photomanager_practice/widgets/diceBearAvatar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../screen/login_screen.dart';
@@ -651,6 +652,41 @@ class _CustomDrawerState extends State<CustomDrawer> {
                           MaterialPageRoute(
                             builder: (_) => const SharedWithMeScreen(),
                           ),
+                        );
+                      },
+                    ),
+
+                    drawerItem(
+                      icon: Icons.backup,
+                      text: "Backup Photos",
+                      onTap: () async {
+                        Navigator.pop(context); // close drawer
+
+                        final prefs = await SharedPreferences.getInstance();
+                        final userId = prefs.getString('user_id');
+                        final companyId = prefs.getInt('selected_company_id');
+
+                        if (userId == null || companyId == null) return;
+
+                        Directory rootDir;
+
+                        if (Platform.isAndroid) {
+                          final base = await getExternalStorageDirectory();
+                          if (base == null) return;
+                          rootDir = Directory(
+                            '${base.path}/ScanVaultApp/$companyId/$userId',
+                          );
+                        } else {
+                          final docDir =
+                              await getApplicationDocumentsDirectory();
+                          rootDir = Directory(
+                            '${docDir.path}/ScanVaultApp/$companyId/$userId',
+                          );
+                        }
+
+                        await BackupService.backupAllPhotos(
+                          widget.parentContext,
+                          rootDir,
                         );
                       },
                     ),

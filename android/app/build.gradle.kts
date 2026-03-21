@@ -24,7 +24,7 @@ android {
         applicationId = "com.techstrota.scanvault.business"
         minSdk = 21
         targetSdk = 36
-        versionCode = 5
+        versionCode = 10
         versionName = "1.0.2"
     }
     

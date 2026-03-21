@@ -9,6 +9,7 @@ import 'package:photomanager_practice/screen/gallery_screen.dart';
 import 'package:photomanager_practice/screen/pdf_viewer_screen.dart';
 import 'package:photomanager_practice/screen/scan_screen.dart';
 import 'package:photomanager_practice/services/auto_upload_service.dart';
+import 'package:photomanager_practice/services/backup_service.dart';
 import 'package:photomanager_practice/services/bottom_tabs.dart';
 import 'package:photomanager_practice/services/folder_service.dart';
 import 'package:photomanager_practice/services/folder_share_service.dart';
@@ -1073,6 +1074,22 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
                   color: Theme.of(context).colorScheme.primary,
                 ),
                 onPressed: _shareSelectedFiles,
+              ),
+
+            if (selectionMode)
+              IconButton(
+                icon: const Icon(Icons.backup),
+                onPressed: () async {
+                  await BackupService.backupSelectedPhotos(
+                    context,
+                    selectedImages,
+                  );
+
+                  setState(() {
+                    selectionMode = false;
+                    selectedImages.clear();
+                  });
+                },
               ),
 
             PopupMenuButton<String>(

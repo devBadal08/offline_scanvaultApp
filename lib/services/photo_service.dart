@@ -317,7 +317,7 @@ class PhotoService {
     final data = jsonDecode(res.body);
     final percent = (data['percent_used'] ?? 0).toDouble();
 
-    if (percent >= 99) {
+    if (percent >= 98.5) {
       if (!silent && context != null && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -713,11 +713,15 @@ class PhotoService {
         final end = (start + batchSize < imagePairs.length)
             ? start + batchSize
             : imagePairs.length;
+
         final batch = imagePairs.sublist(start, end);
+
         final success = await uploadBatch(batch, 'images');
+
         if (!success) {
           allSuccess = false;
-          break;
+          debugPrint("❌ Image batch failed → continuing...");
+          continue; // ✅ keep going instead of break
         }
       }
 
@@ -730,7 +734,8 @@ class PhotoService {
         final success = await uploadBatch(batch, 'videos');
         if (!success) {
           allSuccess = false;
-          break;
+          debugPrint("❌ Video batch failed → continuing...");
+          continue; // ✅ keep going instead of break
         }
       }
 
@@ -743,7 +748,8 @@ class PhotoService {
         final success = await uploadBatch(batch, 'pdfs'); // type = 'pdfs'
         if (!success) {
           allSuccess = false;
-          break;
+          debugPrint("❌ PDF batch failed → continuing...");
+          continue; // ✅ keep going instead of break
         }
       }
 

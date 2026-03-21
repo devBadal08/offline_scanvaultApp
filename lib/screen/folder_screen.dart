@@ -158,10 +158,10 @@ class _FolderScreenState extends State<FolderScreen>
 
         setState(() {
           percentUsed = usedPercent;
-          isStorageNearLimit = percentUsed >= 85;
+          isStorageNearLimit = percentUsed >= 80;
           storageMessage = percentUsed >= 98.5
               ? "Storage full! Please contact admin."
-              : percentUsed >= 85
+              : percentUsed >= 80
               ? "Warning: You are close to your storage limit!"
               : "";
         });
@@ -424,125 +424,139 @@ class _FolderScreenState extends State<FolderScreen>
   Future<void> _shareFolder(Directory folder) async {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => Wrap(
-        children: [
-          ListTile(
-            leading: Icon(
-              Icons.email,
-              color: Theme.of(context).colorScheme.secondary,
-            ),
-            title: const Text("Share via Email (App Share)"),
-            onTap: () async {
-              Navigator.pop(ctx); // close bottom sheet
-              final TextEditingController controller = TextEditingController();
-
-              await showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Share Folder'),
-                  content: TextField(
-                    controller: controller,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter User Email to share with',
-                    ),
-                    keyboardType: TextInputType.emailAddress,
+      builder: (ctx) {
+        return SafeArea(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(
+                    Icons.email,
+                    color: Theme.of(context).colorScheme.secondary,
                   ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () async {
-                        final email = controller.text.trim();
-                        if (email.isEmpty || !email.contains("@")) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Invalid Email')),
-                          );
-                          return;
-                        }
+                  title: const Text("Share via Email (App Share)"),
+                  onTap: () async {
+                    Navigator.pop(ctx); // close bottom sheet
+                    final TextEditingController controller =
+                        TextEditingController();
 
-                        // Get folder ID from server
-                        final folderId = await FolderShareService.getFolderId(
-                          folderName: folder.path.split('/').last,
-                          parentId: null, // main folder has no parent
-                        );
-
-                        if (folderId == null) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'This folder hasn’t been uploaded yet. Upload first to share.',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-
-                        final success = await FolderShareService()
-                            .shareFolderByEmail(folderId, email);
-
-                        if (!mounted) return;
-                        Navigator.pop(context);
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              success
-                                  ? 'Folder shared successfully!'
-                                  : 'Failed to share',
-                            ),
+                    await showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Share Folder'),
+                        content: TextField(
+                          controller: controller,
+                          decoration: const InputDecoration(
+                            hintText: 'Enter User Email to share with',
                           ),
-                        );
-                      },
-                      child: const Text('Share'),
-                    ),
-                  ],
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () async {
+                              final email = controller.text.trim();
+                              if (email.isEmpty || !email.contains("@")) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Invalid Email'),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              // Get folder ID from server
+                              final folderId =
+                                  await FolderShareService.getFolderId(
+                                    folderName: folder.path.split('/').last,
+                                    parentId: null, // main folder has no parent
+                                  );
+
+                              if (folderId == null) {
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'This folder hasn’t been uploaded yet. Upload first to share.',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              final success = await FolderShareService()
+                                  .shareFolderByEmail(folderId, email);
+
+                              if (!mounted) return;
+                              Navigator.pop(context);
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    success
+                                        ? 'Folder shared successfully!'
+                                        : 'Failed to share',
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('Share'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
-          ListTile(
-            leading: Icon(
-              Icons.share,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            title: const Text("Share via WhatsApp / Bluetooth"),
-            onTap: () async {
-              Navigator.pop(ctx); // close bottom sheet
-
-              final files = folder
-                  .listSync()
-                  .whereType<File>()
-                  .where(
-                    (f) =>
-                        f.path.endsWith(".jpg") ||
-                        f.path.endsWith(".jpeg") ||
-                        f.path.endsWith(".png"),
-                  )
-                  .map((f) => XFile(f.path))
-                  .toList();
-
-              if (files.isNotEmpty) {
-                await Share.shareXFiles(
-                  files,
-                  text: "📂 Sharing folder: ${folder.path.split('/').last}",
-                );
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("No images found in this folder"),
+                ListTile(
+                  leading: Icon(
+                    Icons.share,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
-                );
-              }
-            },
+                  title: const Text("Share via WhatsApp / Bluetooth"),
+                  onTap: () async {
+                    Navigator.pop(ctx); // close bottom sheet
+
+                    final files = folder
+                        .listSync()
+                        .whereType<File>()
+                        .where(
+                          (f) =>
+                              f.path.endsWith(".jpg") ||
+                              f.path.endsWith(".jpeg") ||
+                              f.path.endsWith(".png"),
+                        )
+                        .map((f) => XFile(f.path))
+                        .toList();
+
+                    if (files.isNotEmpty) {
+                      await Share.shareXFiles(
+                        files,
+                        text:
+                            "📂 Sharing folder: ${folder.path.split('/').last}",
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("No images found in this folder"),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
