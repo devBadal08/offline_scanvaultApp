@@ -20,6 +20,7 @@ import 'package:photomanager_practice/widgets/pdf_list_cards.dart';
 import 'package:photomanager_practice/widgets/shared_folder_list.dart';
 import 'package:photomanager_practice/widgets/video_thumb_widget.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_player/video_player.dart';
 import 'package:video_thumbnail/video_thumbnail.dart' as vt;
 import 'package:photomanager_practice/widgets/image_grid.dart';
@@ -955,17 +956,37 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
     final newPath = '${parentDir.path}/$result.pdf';
 
     try {
-      await pdfFile.rename(newPath);
+      final oldPath = pdfFile.path;
 
-      if (widget.isShared) {
-        _loadSharedPhotos(widget.sharedFolderId!);
-      } else {
-        await _loadItems();
+      String serverPath = oldPath.replaceAll(RegExp(r'.*ScanVaultApp/'), '');
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      if (token != null) {
+        final success = await PhotoService.renameFileOnServer(
+          oldPath: serverPath,
+          newName: result,
+          token: token,
+        );
+
+        if (success) {
+          // ✅ rename locally (correct way)
+          await File(oldPath).rename(newPath);
+
+          // ✅ update tracking
+          PhotoService.uploadedFiles.value.remove(oldPath);
+          PhotoService.uploadedFiles.value.add(newPath);
+
+          await _loadItems();
+
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('PDF renamed successfully')));
+        }
       }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('PDF renamed to $result.pdf')));
+      print("🧠 OLD LOCAL PATH: $oldPath");
+      print("🧠 SERVER PATH: $serverPath");
     } catch (e) {
       ScaffoldMessenger.of(
         context,

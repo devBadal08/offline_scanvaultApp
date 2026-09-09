@@ -43,7 +43,7 @@ class PhotoService {
     required String folderName,
     required String token,
   }) async {
-    final url = Uri.parse('https://techstrota.cloud/api/photos/uploadAll');
+    final url = Uri.parse('http://192.168.1.6:8000/api/photos/uploadAll');
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -69,22 +69,28 @@ class PhotoService {
   }
 
   static Future<Directory?> getUserRootDir() async {
-    final prefs = await SharedPreferences.getInstance();
-    final userId = prefs.getString('user_id');
-    final companyId = prefs.getInt('selected_company_id');
+    try {
+      Directory rootDir;
 
-    if (userId == null || companyId == null) return null;
+      if (Platform.isAndroid) {
+        rootDir = Directory('/storage/emulated/0/Pictures/ScanVaultApp');
+      } else {
+        final docs = await getApplicationDocumentsDirectory();
+        rootDir = Directory('${docs.path}/ScanVaultApp');
+      }
 
-    final base = await getExternalStorageDirectory();
-    if (base == null) return null;
+      if (!await rootDir.exists()) {
+        await rootDir.create(recursive: true);
+        print('✅ ScanVaultApp folder created');
+      }
 
-    final dir = Directory('${base.path}/ScanVaultApp/$companyId/$userId');
+      print('📂 ROOT PATH = ${rootDir.path}');
 
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
+      return rootDir;
+    } catch (e) {
+      print('❌ getUserRootDir Error: $e');
+      return null;
     }
-
-    return dir;
   }
 
   Future<List<String>> listFolders() async {
@@ -97,6 +103,22 @@ class PhotoService {
         .whereType<Directory>()
         .map((dir) => dir.path.split(Platform.pathSeparator).last)
         .toList();
+  }
+
+  static Future<bool> renameFileOnServer({
+    required String oldPath,
+    required String newName,
+    required String token,
+  }) async {
+    final response = await http.post(
+      Uri.parse('http://192.168.1.6:8000/api/photos/rename-file'),
+      headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
+      body: {'old_path': oldPath, 'new_name': newName},
+    );
+
+    print("🔄 Rename response: ${response.body}");
+
+    return response.statusCode == 200;
   }
 
   Future<List<File>> loadPhotosInFolder(String folderName) async {
@@ -307,7 +329,7 @@ class PhotoService {
 
     final res = await http.get(
       Uri.parse(
-        'https://techstrota.cloud/api/storage-usage?company_id=$companyId',
+        'http://192.168.1.6:8000/api/storage-usage?company_id=$companyId',
       ),
       headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
     );
@@ -387,7 +409,7 @@ class PhotoService {
 
     // ✅ single http.post call
     final response = await http.post(
-      Uri.parse('https://techstrota.cloud/api/photos/create-folder'),
+      Uri.parse('http://192.168.1.6:8000/api/photos/create-folder'),
       headers: {'Authorization': 'Bearer $token', 'Accept': 'application/json'},
       body: body,
     );
@@ -582,7 +604,7 @@ class PhotoService {
       final selectedCompanyId = prefs.getInt("selected_company_id");
 
       final checkUrl = Uri.parse(
-        'https://techstrota.cloud/api/storage-usage?company_id=$selectedCompanyId',
+        'http://192.168.1.6:8000/api/storage-usage?company_id=$selectedCompanyId',
       );
 
       final checkResponse = await http.get(
@@ -665,7 +687,7 @@ class PhotoService {
       ) async {
         final request = http.MultipartRequest(
           'POST',
-          Uri.parse('https://techstrota.cloud/api/photos/uploadAll'),
+          Uri.parse('http://192.168.1.6:8000/api/photos/uploadAll'),
         );
 
         request.headers['Authorization'] = 'Bearer $token';

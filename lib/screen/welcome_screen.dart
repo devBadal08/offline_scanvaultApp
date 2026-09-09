@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:photomanager_practice/provider/theme_provider.dart';
+import 'package:photomanager_practice/screen/folder_screen.dart';
 import 'package:provider/provider.dart';
-import 'login_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WelcomeScreen extends StatefulWidget {
   @override
@@ -39,10 +40,24 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
               // Login Button
               ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  final userId = prefs.getString('user_id');
+
+                  if (!context.mounted) return;
+
+                  if (userId == null || userId.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("User ID not found")),
+                    );
+                    return;
+                  }
+
+                  Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => LoginScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => FolderScreen(userId: userId),
+                    ),
                   );
                 },
                 style: ElevatedButton.styleFrom(

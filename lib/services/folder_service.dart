@@ -101,18 +101,25 @@ class FolderService {
   }
 
   Future<bool> createFolder(String folderName) async {
+    print("===== CREATE FOLDER METHOD ENTERED =====");
     final baseDir = await PhotoService.getUserRootDir();
+
+    print("BASE DIR = ${baseDir?.path}");
+    print("FOLDER NAME = $folderName");
+
     if (baseDir == null) return false;
 
-    if (!await baseDir.exists()) {
-      await baseDir.create(recursive: true);
-    }
-
     final dir = Directory('${baseDir.path}/$folderName');
+
+    print("FULL PATH = ${dir.path}");
+    print("EXISTS = ${await dir.exists()}");
 
     if (await dir.exists()) return false;
 
     await dir.create(recursive: true);
+
+    print("FOLDER CREATED");
+
     return true;
   }
 

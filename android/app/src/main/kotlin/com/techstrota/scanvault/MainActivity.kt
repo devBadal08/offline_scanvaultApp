@@ -1,4 +1,4 @@
-package com.techstrota.scanvault.business
+package com.techstrota.scanvault.offline
 
 import android.os.Bundle
 import androidx.core.view.WindowCompat

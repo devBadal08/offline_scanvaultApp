@@ -17,15 +17,15 @@ if (keystorePropertiesFile.exists()) {
 
 
 android {
-    namespace = "com.techstrota.scanvault.business"
+    namespace = "com.techstrota.scanvault.offline"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.techstrota.scanvault.business"
+        applicationId = "com.techstrota.scanvault.offline"
         minSdk = 21
         targetSdk = 36
-        versionCode = 10
-        versionName = "1.0.2"
+        versionCode = 12
+        versionName = "1.0.3"
     }
     
     ndkVersion = "27.0.12077973"

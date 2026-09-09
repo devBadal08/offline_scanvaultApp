@@ -138,8 +138,12 @@ class BottomTabs extends StatelessWidget {
           }
 
           if (index == 4 && onCreateFolder != null) {
-            // Create folder tab
+            print("CREATE TAB CLICKED");
+
             onCreateFolder!(index);
+
+            print("CREATE CALLBACK EXECUTED");
+
             _resetTab(tabController);
             return;
           }

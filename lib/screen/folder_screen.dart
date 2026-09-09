@@ -54,9 +54,9 @@ class _FolderScreenState extends State<FolderScreen>
     _tabController = TabController(length: 5, vsync: this);
     _loadInitialData();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkCompanyStorageUsage();
-    });
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   _checkCompanyStorageUsage();
+    // });
   }
 
   Future<void> _loadInitialData() async {
@@ -133,7 +133,7 @@ class _FolderScreenState extends State<FolderScreen>
       }
 
       final url = Uri.parse(
-        'https://techstrota.cloud/api/storage-usage?company_id=$companyId',
+        'http://192.168.1.6:8000/api/storage-usage?company_id=$companyId',
       );
 
       final token = await folderService.getAuthToken();
@@ -390,15 +390,8 @@ class _FolderScreenState extends State<FolderScreen>
 
               final folderId = await FolderService.getFolderIdFromDisk(folder);
 
-              print('🧪 FOLDER SCREEN RENAME DEBUG');
-              print('➡️ Folder path = ${folder.path}');
-              print('➡️ Folder name = ${folder.path.split('/').last}');
-              print('➡️ Returned folderId = $folderId');
-
               if (folderId == null) {
                 // ✅ LOCAL-ONLY FOLDER
-                print('ℹ️ Local-only folder. Renaming locally.');
-
                 await folder.rename(newPath);
                 _loadFolders(); // or _loadItems()
                 _countFoldersAndImages();

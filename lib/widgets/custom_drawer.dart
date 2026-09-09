@@ -12,7 +12,6 @@ import 'package:photomanager_practice/services/auto_upload_service.dart';
 import 'package:photomanager_practice/services/backup_service.dart';
 import 'package:photomanager_practice/widgets/diceBearAvatar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../screen/login_screen.dart';
 import '../screen/user_profile_screen.dart';
 import '../services/folder_service.dart';
 import '../provider/theme_provider.dart';
@@ -178,6 +177,11 @@ class _CustomDrawerState extends State<CustomDrawer> {
           Navigator.pop(context);
           Navigator.pushReplacement(
             widget.parentContext,
+            // MaterialPageRoute(
+            //   builder: (_) {
+            //     return FolderScreen(userId: prefs.getString("user_id")!);
+            //   },
+            // ),
             MaterialPageRoute(
               builder: (_) {
                 return FolderScreen(userId: prefs.getString("user_id")!);
@@ -283,7 +287,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
     final token = prefs.getString("auth_token");
     final userId = prefs.getString("user_id");
 
-    final uri = Uri.parse("https://techstrota.cloud/api/upload-selfie");
+    final uri = Uri.parse("http://192.168.1.6:8000/api/upload-selfie");
 
     final request = http.MultipartRequest("POST", uri);
     request.headers["Authorization"] = "Bearer $token";
@@ -321,7 +325,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
 
     if (token == null) return;
 
-    final uri = Uri.parse("https://techstrota.cloud/api/remove-profile-photo");
+    final uri = Uri.parse("http://192.168.1.6:8000/api/remove-profile-photo");
 
     final response = await http.post(
       uri,
@@ -538,25 +542,6 @@ class _CustomDrawerState extends State<CustomDrawer> {
     );
   }
 
-  void _showLogoutDialog(BuildContext context) {
-    FolderService().showLogoutDialog(context, () async {
-      if (mounted) {
-        await FolderService().logoutUser();
-        // 1️⃣ Close the logout confirmation dialog
-        Navigator.of(context).pop();
-
-        // 2️⃣ Close the custom drawer dialog
-        Navigator.of(widget.parentContext).pop();
-
-        // 3️⃣ Navigate to login screen using parent context
-        Navigator.pushReplacement(
-          widget.parentContext,
-          MaterialPageRoute(builder: (_) => LoginScreen()),
-        );
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Align(
@@ -698,14 +683,6 @@ class _CustomDrawerState extends State<CustomDrawer> {
                           : "Light Mode",
                       onTap: () =>
                           themeProvider.toggleTheme(!themeProvider.isDarkMode),
-                    ),
-
-                    const Divider(),
-
-                    drawerItem(
-                      icon: Icons.logout,
-                      text: "Log Out",
-                      onTap: () => _showLogoutDialog(context),
                     ),
                   ],
                 );
